@@ -1,74 +1,219 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+interface Message {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: Date;
+}
 
 export default function HomeScreen() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      text: 'Hello! I\'m your AI study assistant for medical and nursing questions. Ask me anything about anatomy, pharmacology, pathophysiology, or nursing procedures!',
+      isUser: false,
+      timestamp: new Date(),
+    },
+  ]);
+  const [inputText, setInputText] = useState('');
+
+  const sendMessage = () => {
+    if (inputText.trim()) {
+      const newMessage: Message = {
+        id: Date.now().toString(),
+        text: inputText.trim(),
+        isUser: true,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+      setInputText('');
+
+      // Simulate AI response
+      setTimeout(() => {
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Thanks for your question! This is a demo response. In a real implementation, this would connect to an AI medical knowledge service.',
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiResponse]);
+      }, 1000);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Fast Facts MD</Text>
+          <Text style={styles.subtitle}>Medical Study Assistant</Text>
+        </View>
+
+        <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+          {messages.map(message => (
+            <View
+              key={message.id}
+              style={[
+                styles.messageContainer,
+                message.isUser ? styles.userMessage : styles.aiMessage,
+              ]}
+            >
+              <Text style={[styles.messageText, message.isUser ? styles.userMessageText : styles.aiMessageText]}>
+                {message.text}
+              </Text>
+              <Text style={[styles.timestamp, message.isUser ? styles.userTimestamp : styles.aiTimestamp]}>
+                {message.timestamp.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask a medical question..."
+            placeholderTextColor="#666"
+            multiline
+            maxLength={500}
+            testID="chat-input"
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            onPress={sendMessage}
+            disabled={!inputText.trim()}
+            testID="send-button"
+          >
+            <Text style={styles.sendButtonText}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
+  header: {
+    backgroundColor: '#2c5aa0',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  subtitle: {
+    fontSize: 14,
+    color: '#e3f2fd',
+  },
+  messagesContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  messageContainer: {
+    marginVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    maxWidth: '80%',
+  },
+  userMessage: {
+    backgroundColor: '#2c5aa0',
+    alignSelf: 'flex-end',
+  },
+  aiMessage: {
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  userMessageText: {
+    color: '#fff',
+  },
+  aiMessageText: {
+    color: '#333',
+  },
+  timestamp: {
+    fontSize: 12,
+    marginTop: 6,
+    opacity: 0.7,
+  },
+  userTimestamp: {
+    color: '#fff',
+  },
+  aiTimestamp: {
+    color: '#666',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    alignItems: 'flex-end',
+  },
+  textInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginRight: 12,
+    fontSize: 16,
+    backgroundColor: '#f8f9fa',
+    maxHeight: 100,
+  },
+  sendButton: {
+    backgroundColor: '#2c5aa0',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  sendButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
