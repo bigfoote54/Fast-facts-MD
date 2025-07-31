@@ -2,3 +2,6 @@ fastapi
 uvicorn
 openai
 python-dotenv
+pydantic[zod]
+pytest
+httpx

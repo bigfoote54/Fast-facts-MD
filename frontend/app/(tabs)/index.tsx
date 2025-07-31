@@ -8,8 +8,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiService } from '../services/api';
+import { QuestionPayload } from '../../shared/types';
 
 interface Message {
   id: string;
@@ -29,11 +32,19 @@ export default function HomeScreen() {
   ]);
   const [inputText, setInputText] = useState('');
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (inputText.trim()) {
+      const userQuestion = inputText.trim();
+      
+      // Validate question length
+      if (userQuestion.length > 280) {
+        Alert.alert('Error', 'Question must be 280 characters or less');
+        return;
+      }
+
       const newMessage: Message = {
         id: Date.now().toString(),
-        text: inputText.trim(),
+        text: userQuestion,
         isUser: true,
         timestamp: new Date(),
       };
@@ -41,16 +52,27 @@ export default function HomeScreen() {
       setMessages(prev => [...prev, newMessage]);
       setInputText('');
 
-      // Simulate AI response
-      setTimeout(() => {
+      try {
+        const questionPayload: QuestionPayload = { question: userQuestion };
+        const response = await apiService.askQuestion(questionPayload);
+        
         const aiResponse: Message = {
           id: (Date.now() + 1).toString(),
-          text: 'Thanks for your question! This is a demo response. In a real implementation, this would connect to an AI medical knowledge service.',
+          text: response.response,
           isUser: false,
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, aiResponse]);
-      }, 1000);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `Sorry, I encountered an error: ${errorMessage}`,
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, aiResponse]);
+      }
     }
   };
 
@@ -95,7 +117,7 @@ export default function HomeScreen() {
             placeholder="Ask a medical question..."
             placeholderTextColor="#666"
             multiline
-            maxLength={500}
+            maxLength={280}
             testID="chat-input"
           />
           <TouchableOpacity
