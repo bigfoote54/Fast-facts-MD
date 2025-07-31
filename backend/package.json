@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "FastAPI backend for Fast Facts MD",
   "scripts": {
+    "dev": "echo 'Backend dev server not implemented yet'",
     "test": "python -m pytest __tests__/ -v",
     "lint": "echo 'No Python linting configured yet'",
     "type-check": "echo 'No Python type checking configured yet'"

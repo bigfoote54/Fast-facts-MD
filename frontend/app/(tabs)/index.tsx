@@ -11,8 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiService } from '../services/api';
-import { QuestionPayload } from '../../shared/types';
+import { apiService } from '@/services/api';
+import { QuestionPayload } from '../../../shared/types';
 
 interface Message {
   id: string;
@@ -25,7 +25,7 @@ export default function HomeScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hello! I\'m your AI study assistant for medical and nursing questions. Ask me anything about anatomy, pharmacology, pathophysiology, or nursing procedures!',
+      text: "Hello! I'm your AI study assistant for medical and nursing questions. Ask me anything about anatomy, pharmacology, pathophysiology, or nursing procedures!",
       isUser: false,
       timestamp: new Date(),
     },
@@ -35,7 +35,7 @@ export default function HomeScreen() {
   const sendMessage = async () => {
     if (inputText.trim()) {
       const userQuestion = inputText.trim();
-      
+
       // Validate question length
       if (userQuestion.length > 280) {
         Alert.alert('Error', 'Question must be 280 characters or less');
@@ -55,7 +55,7 @@ export default function HomeScreen() {
       try {
         const questionPayload: QuestionPayload = { question: userQuestion };
         const response = await apiService.askQuestion(questionPayload);
-        
+
         const aiResponse: Message = {
           id: (Date.now() + 1).toString(),
           text: response.response,
@@ -96,10 +96,20 @@ export default function HomeScreen() {
                 message.isUser ? styles.userMessage : styles.aiMessage,
               ]}
             >
-              <Text style={[styles.messageText, message.isUser ? styles.userMessageText : styles.aiMessageText]}>
+              <Text
+                style={[
+                  styles.messageText,
+                  message.isUser ? styles.userMessageText : styles.aiMessageText,
+                ]}
+              >
                 {message.text}
               </Text>
-              <Text style={[styles.timestamp, message.isUser ? styles.userTimestamp : styles.aiTimestamp]}>
+              <Text
+                style={[
+                  styles.timestamp,
+                  message.isUser ? styles.userTimestamp : styles.aiTimestamp,
+                ]}
+              >
                 {message.timestamp.toLocaleTimeString([], {
                   hour: '2-digit',
                   minute: '2-digit',
