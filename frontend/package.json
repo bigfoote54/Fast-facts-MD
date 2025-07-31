@@ -11,8 +11,8 @@
     "export": "expo export -p web",
     "test": "jest --watchAll",
     "test:ci": "jest --ci --coverage --watchAll=false",
-    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0 --config ../../.eslintrc.js",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix --config ../../.eslintrc.js",
     "type-check": "tsc --noEmit",
     "format": "prettier --write ."
   },
@@ -57,9 +57,6 @@
     "prettier": "^3.4.2",
     "react-test-renderer": "18.3.1",
     "typescript": "^5.7.2"
-  },
-  "eslintConfig": {
-    "extends": "../../.eslintrc.js"
   },
   "private": true
 }

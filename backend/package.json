@@ -7,8 +7,5 @@
     "lint": "echo 'No Python linting configured yet'",
     "type-check": "echo 'No Python type checking configured yet'"
   },
-  "eslintConfig": {
-    "extends": "../../.eslintrc.js"
-  },
   "private": true
 }
