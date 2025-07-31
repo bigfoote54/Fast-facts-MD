@@ -8,13 +8,13 @@
     "backend"
   ],
   "scripts": {
-    "lint": "pnpm -r run lint",
-    "type-check": "pnpm -r run type-check",
-    "test": "pnpm -r run test",
-    "setup": "pnpm install --frozen-lockfile && cd frontend && npx playwright install webkit && echo '🎉 Ready'",
-    "dev": "cd frontend && pnpm start",
-    "build": "cd frontend && pnpm run export",
-    "start": "cd frontend && pnpm start --web"
+    "lint": "npm run lint --workspaces",
+    "type-check": "npm run type-check --workspaces",
+    "test": "npm run test --workspaces",
+    "setup": "npm install && cd frontend && npx playwright install webkit && echo '🎉 Ready'",
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run export --workspace=frontend",
+    "start": "npm run start --workspace=frontend -- --web"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
@@ -27,8 +27,6 @@
     "typescript": "^5.7.2"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
-  },
-  "packageManager": "pnpm@8.15.0"
+    "node": ">=18.0.0"
+  }
 }
