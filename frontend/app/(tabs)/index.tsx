@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,72 +9,134 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiService } from '@/services/api';
-import { QuestionPayload } from '../../../shared/types';
+import { ConversationMessage, QuestionPayload } from '../../../shared/types';
+
+type ChatRole = 'user' | 'assistant' | 'system';
 
 interface Message {
   id: string;
+  role: ChatRole;
   text: string;
-  isUser: boolean;
   timestamp: Date;
 }
 
+const parseEnvNumber = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return fallback;
+};
+
+const MAX_QUESTION_LENGTH = parseEnvNumber(process.env.EXPO_PUBLIC_MAX_QUESTION_LENGTH, 280);
+const MAX_HISTORY_FOR_PAYLOAD = parseEnvNumber(process.env.EXPO_PUBLIC_MAX_HISTORY_MESSAGES, 6);
+
+const SAMPLE_QUESTIONS = [
+  'Summarize the pathophysiology of heart failure.',
+  'How do beta blockers work and what are common side effects?',
+  'Create a mnemonic for the cranial nerves.',
+];
+
+const initialMessage: Message = {
+  id: 'greeting',
+  role: 'system',
+  text: "Hello! I'm Fast Facts MD, your AI study assistant for medical and nursing questions. Ask me about anatomy, pharmacology, pathophysiology, or clinical procedures.",
+  timestamp: new Date(),
+};
+
+const isConversationMessage = (message: Message): message is Message & { role: 'user' | 'assistant' } =>
+  message.role === 'user' || message.role === 'assistant';
+
+const buildConversation = (history: Message[]): ConversationMessage[] =>
+  history
+    .filter(isConversationMessage)
+    .map(message => ({ role: message.role, content: message.text }))
+    .slice(-MAX_HISTORY_FOR_PAYLOAD);
+
 export default function HomeScreen() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: "Hello! I'm your AI study assistant for medical and nursing questions. Ask me anything about anatomy, pharmacology, pathophysiology, or nursing procedures!",
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [inputText, setInputText] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const scrollViewRef = useRef<ScrollView | null>(null);
 
-  const sendMessage = async () => {
-    if (inputText.trim()) {
-      const userQuestion = inputText.trim();
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [messages]);
 
-      // Validate question length
-      if (userQuestion.length > 280) {
-        Alert.alert('Error', 'Question must be 280 characters or less');
-        return;
-      }
+  const characterCount = inputText.length;
+  const remainingCharacters = MAX_QUESTION_LENGTH - characterCount;
 
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        text: userQuestion,
-        isUser: true,
+  const sendMessage = useCallback(async () => {
+    const trimmedQuestion = inputText.trim();
+
+    if (!trimmedQuestion || isSending) {
+      return;
+    }
+
+    if (trimmedQuestion.length > MAX_QUESTION_LENGTH) {
+      Alert.alert('Error', `Question must be ${MAX_QUESTION_LENGTH} characters or less`);
+      return;
+    }
+
+    const conversationHistory = buildConversation(messages);
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      text: trimmedQuestion,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    Keyboard.dismiss();
+    setIsSending(true);
+
+    try {
+      const questionPayload: QuestionPayload = {
+        question: trimmedQuestion,
+        conversation: conversationHistory,
+      };
+      const response = await apiService.askQuestion(questionPayload);
+
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: response.response,
         timestamp: new Date(),
       };
-
-      setMessages(prev => [...prev, newMessage]);
-      setInputText('');
-
-      try {
-        const questionPayload: QuestionPayload = { question: userQuestion };
-        const response = await apiService.askQuestion(questionPayload);
-
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: response.response,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiResponse]);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: `Sorry, I encountered an error: ${errorMessage}`,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiResponse]);
-      }
+      setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      Alert.alert('Request failed', errorMessage);
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: `Sorry, I encountered an error: ${errorMessage}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiResponse]);
+    } finally {
+      setIsSending(false);
     }
-  };
+  }, [inputText, isSending, messages]);
+
+  const handleSamplePress = useCallback(
+    (sample: string) => {
+      setInputText(sample);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    },
+    [],
+  );
+
+  const isSendDisabled = useMemo(() => !inputText.trim() || isSending, [inputText, isSending]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -87,60 +149,116 @@ export default function HomeScreen() {
           <Text style={styles.subtitle}>Medical Study Assistant</Text>
         </View>
 
-        <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
-          {messages.map(message => (
-            <View
-              key={message.id}
-              style={[
-                styles.messageContainer,
-                message.isUser ? styles.userMessage : styles.aiMessage,
-              ]}
+        <View style={styles.disclaimerContainer}>
+          <Text style={styles.disclaimerTitle}>Study Support Only</Text>
+          <Text style={styles.disclaimerText}>
+            Responses are for learning purposes and do not replace professional medical advice or clinical
+            judgment.
+          </Text>
+        </View>
+
+        <View style={styles.samplesContainer}>
+          {SAMPLE_QUESTIONS.map(sample => (
+            <TouchableOpacity
+              key={sample}
+              style={styles.sampleChip}
+              onPress={() => handleSamplePress(sample)}
+              accessibilityRole="button"
             >
-              <Text
-                style={[
-                  styles.messageText,
-                  message.isUser ? styles.userMessageText : styles.aiMessageText,
-                ]}
-              >
-                {message.text}
-              </Text>
-              <Text
-                style={[
-                  styles.timestamp,
-                  message.isUser ? styles.userTimestamp : styles.aiTimestamp,
-                ]}
-              >
-                {message.timestamp.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
-            </View>
+              <Text style={styles.sampleChipText}>{sample}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.messagesContent}
+        >
+          {messages.map(message => (
+            <MessageBubble key={message.id} message={message} />
           ))}
         </ScrollView>
 
         <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask a medical question..."
-            placeholderTextColor="#666"
-            multiline
-            maxLength={280}
-            testID="chat-input"
-          />
+          <View style={styles.inputWrapper}>
+            <Text style={[styles.charCount, remainingCharacters < 0 && styles.charCountExceeded]}>
+              {`${Math.max(remainingCharacters, 0)} characters left`}
+            </Text>
+
+            <TextInput
+              style={styles.textInput}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Ask a medical question..."
+              placeholderTextColor="#666"
+              multiline
+              maxLength={MAX_QUESTION_LENGTH}
+              testID="chat-input"
+              editable={!isSending}
+              accessibilityLabel="Ask a medical question"
+              returnKeyType="send"
+              blurOnSubmit={false}
+              onSubmitEditing={sendMessage}
+            />
+          </View>
           <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            style={[styles.sendButton, isSendDisabled && styles.sendButtonDisabled]}
             onPress={sendMessage}
-            disabled={!inputText.trim()}
+            disabled={isSendDisabled}
             testID="send-button"
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
           >
-            <Text style={styles.sendButtonText}>Send</Text>
+            {isSending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.sendButtonText}>Send</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function MessageBubble({ message }: { message: Message }) {
+  const isUser = message.role === 'user';
+  const isAssistant = message.role === 'assistant';
+
+  return (
+    <View
+      style={[
+        styles.messageContainer,
+        isUser && styles.userMessage,
+        isAssistant && styles.aiMessage,
+        message.role === 'system' && styles.systemMessage,
+      ]}
+    >
+      <Text
+        style={[
+          styles.messageText,
+          isUser && styles.userMessageText,
+          isAssistant && styles.aiMessageText,
+        ]}
+      >
+        {message.text}
+      </Text>
+      <Text
+        style={[
+          styles.timestamp,
+          isUser && styles.userTimestamp,
+          isAssistant && styles.aiTimestamp,
+        ]}
+      >
+        {message.timestamp.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </Text>
+    </View>
   );
 }
 
@@ -173,6 +291,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  messagesContent: {
+    paddingBottom: 12,
+  },
   messageContainer: {
     marginVertical: 6,
     paddingHorizontal: 16,
@@ -189,6 +310,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  systemMessage: {
+    backgroundColor: '#e8f1ff',
+    alignSelf: 'center',
   },
   messageText: {
     fontSize: 16,
@@ -220,6 +345,9 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
     alignItems: 'flex-end',
   },
+  inputWrapper: {
+    flex: 1,
+  },
   textInput: {
     flex: 1,
     borderWidth: 1,
@@ -227,7 +355,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    marginRight: 12,
     fontSize: 16,
     backgroundColor: '#f8f9fa',
     maxHeight: 100,
@@ -239,6 +366,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 12,
   },
   sendButtonDisabled: {
     backgroundColor: '#ccc',
@@ -247,5 +375,53 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  disclaimerContainer: {
+    backgroundColor: '#fff5e6',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ffd7a8',
+  },
+  disclaimerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#8a4d0f',
+    marginBottom: 4,
+  },
+  disclaimerText: {
+    fontSize: 13,
+    color: '#8a4d0f',
+    lineHeight: 18,
+  },
+  samplesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  sampleChip: {
+    backgroundColor: '#e3f2fd',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  sampleChipText: {
+    color: '#225ea8',
+    fontSize: 13,
+  },
+  charCount: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
+    textAlign: 'right',
+    paddingRight: 12,
+  },
+  charCountExceeded: {
+    color: '#c62828',
   },
 });
