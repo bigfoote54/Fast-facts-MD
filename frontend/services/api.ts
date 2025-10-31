@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 
-import { AnswerPayload, QuestionPayload } from '../../../shared/types';
+import { AnswerPayload, QuestionPayload } from '../../shared/types';
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000';
@@ -35,7 +35,10 @@ const extractErrorMessage = (error: unknown): string => {
 export const apiService = {
   async askQuestion(payload: QuestionPayload): Promise<AnswerPayload> {
     try {
-      const response = await client.post<AnswerPayload>('/ask', payload);
+      const response = await client.post<AnswerPayload>('/ask', {
+        question: payload.question,
+        conversation: payload.conversation ?? [],
+      });
       return response.data;
     } catch (error) {
       throw new Error(extractErrorMessage(error));

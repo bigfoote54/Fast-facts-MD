@@ -19,6 +19,12 @@ def mock_chat_create():
 
 
 class TestAskEndpoint:
+    def test_health_check(self):
+        response = client.get("/health")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
     def test_ask_happy_path(self, mock_chat_create: AsyncMock):
         mock_choice = MagicMock()
         mock_choice.message.content = "This is a test response from the AI assistant."
@@ -33,6 +39,35 @@ class TestAskEndpoint:
         data = response.json()
         assert data["response"] == "This is a test response from the AI assistant."
         mock_chat_create.assert_awaited_once()
+        sent_messages = mock_chat_create.await_args.kwargs["messages"]
+        assert sent_messages[0]["role"] == "system"
+        assert sent_messages[-1]["content"] == "What is hypertension?"
+
+    def test_ask_with_conversation_history(self, mock_chat_create: AsyncMock):
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Here is a contextual answer."
+        mock_chat_create.return_value = MagicMock(choices=[mock_choice])
+
+        history = [
+            {"role": "user", "content": f"Question {i}"} if i % 2 == 0 else {"role": "assistant", "content": f"Answer {i}"}
+            for i in range(10)
+        ]
+
+        response = client.post(
+            "/ask",
+            json={
+                "question": "Newest question?",
+                "conversation": history,
+            },
+        )
+
+        assert response.status_code == 200
+        sent_messages = mock_chat_create.await_args.kwargs["messages"]
+        # system prompt + trimmed history (6) + latest question
+        assert len(sent_messages) == 1 + 6 + 1
+        assert sent_messages[1]["role"] == history[-6]["role"]
+        assert sent_messages[-2]["role"] == history[-1]["role"]
+        assert sent_messages[-1]["content"] == "Newest question?"
 
     def test_ask_empty_question_validation(self):
         response = client.post(
