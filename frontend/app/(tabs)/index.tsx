@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { apiService } from '@/services/api';
@@ -21,6 +23,8 @@ interface Message {
   timestamp: Date;
 }
 
+const MAX_QUESTION_LENGTH = 280;
+
 export default function HomeScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -31,48 +35,60 @@ export default function HomeScreen() {
     },
   ]);
   const [inputText, setInputText] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const scrollViewRef = useRef<ScrollView | null>(null);
+
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [messages]);
 
   const sendMessage = async () => {
-    if (inputText.trim()) {
-      const userQuestion = inputText.trim();
+    const trimmedQuestion = inputText.trim();
 
-      // Validate question length
-      if (userQuestion.length > 280) {
-        Alert.alert('Error', 'Question must be 280 characters or less');
-        return;
-      }
+    if (!trimmedQuestion || isSending) {
+      return;
+    }
 
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        text: userQuestion,
-        isUser: true,
+    if (trimmedQuestion.length > MAX_QUESTION_LENGTH) {
+      Alert.alert('Error', `Question must be ${MAX_QUESTION_LENGTH} characters or less`);
+      return;
+    }
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: trimmedQuestion,
+      isUser: true,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    Keyboard.dismiss();
+    setIsSending(true);
+
+    try {
+      const questionPayload: QuestionPayload = { question: trimmedQuestion };
+      const response = await apiService.askQuestion(questionPayload);
+
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: response.response,
+        isUser: false,
         timestamp: new Date(),
       };
-
-      setMessages(prev => [...prev, newMessage]);
-      setInputText('');
-
-      try {
-        const questionPayload: QuestionPayload = { question: userQuestion };
-        const response = await apiService.askQuestion(questionPayload);
-
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: response.response,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiResponse]);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: `Sorry, I encountered an error: ${errorMessage}`,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiResponse]);
-      }
+      setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+      Alert.alert('Request failed', errorMessage);
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `Sorry, I encountered an error: ${errorMessage}`,
+        isUser: false,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, aiResponse]);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -87,7 +103,13 @@ export default function HomeScreen() {
           <Text style={styles.subtitle}>Medical Study Assistant</Text>
         </View>
 
-        <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.messagesContent}
+        >
           {messages.map(message => (
             <View
               key={message.id}
@@ -127,16 +149,21 @@ export default function HomeScreen() {
             placeholder="Ask a medical question..."
             placeholderTextColor="#666"
             multiline
-            maxLength={280}
+            maxLength={MAX_QUESTION_LENGTH}
             testID="chat-input"
+            editable={!isSending}
           />
           <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+            style={[styles.sendButton, (!inputText.trim() || isSending) && styles.sendButtonDisabled]}
             onPress={sendMessage}
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isSending}
             testID="send-button"
           >
-            <Text style={styles.sendButtonText}>Send</Text>
+            {isSending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.sendButtonText}>Send</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -172,6 +199,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  messagesContent: {
+    paddingBottom: 12,
   },
   messageContainer: {
     marginVertical: 6,
